@@ -10,11 +10,11 @@ Description: This File contains controlling methods for drones
 import dronekit
 import time
 
-# Vehicle initialization check time in seconds
+# Vehicle initialization check time period in seconds
 INITIALIZE_CHECK_TIME = 1
 # Initialization timeout in seconds
 INITIALIZE_TIMEOUT = 60
-# Mode switching check time in seconds
+# Mode switching check time period in seconds
 SWITCH_MODE_CHECK_TIME = 0.5
 # Mode switching timeout in seconds
 SWITCH_MODE_TIMEOUT = 2
@@ -22,6 +22,10 @@ SWITCH_MODE_TIMEOUT = 2
 ARM_CHECK_TIME = 0.5
 # Arming timeout in seconds
 ARM_TIMEOUT = 2
+# Taking off target altitude threshold scaler
+TAKEOFF_ALT_SCALER = 0.95
+# Taking off altitude check time period in seconds
+TAKEOFF_CHECK_TIME = 1
 
 '''
 Class name: VehicleState
@@ -37,7 +41,7 @@ class VehicleState(object)
 	landed = "LANDED"
 
 class Vehicle(object)
-	def __init__(FCAddress = None, baudRate = 921600, self):
+	def __init__(self, FCAddress = None, baudRate = 921600):
 		# IP address for SITL simulator. Port 14550 is reserved for GCS
 		# If you're running SITL, make sure mavproxy is running and Port
 		# 14551 has been configured as an "--out" port
@@ -59,7 +63,7 @@ class Vehicle(object)
 	Return: True - initialized successfully
 	        False - initialization not successful
 	'''
-	def initialize(simulation = False, self):
+	def initialize(self, simulation = False):
 		if self.STATE != VehicleState.preFlight:
 			print "Err: Connection denied with vehicle state %s." % self.STATE
 			return False
@@ -93,7 +97,7 @@ class Vehicle(object)
 	Return: True - successfully switched to target mode
 	        False - failed to do so
 	'''
-	def switchMode(targetMode = "GUIDED", self):
+	def switchMode(self, targetMode = "GUIDED"):
 		self.vehicle.mode = dronekit.VehicleMode(targetMode)
 		timeoutCounter = 0
 		while self.vehicle.mode != dronekit.VehicleMode(targetMode):
@@ -111,7 +115,7 @@ class Vehicle(object)
 	Return: True - armed successfully
 	        False - failed to do so
 	'''
-	def arm(checkGUIDED = True, self):
+	def arm(self, checkGUIDED = True):
 		if checkGUIDED and self.vehicle.mode != dronekit.VehicleMode("GUIDED"):
 			self.switchMode()
 		
@@ -132,7 +136,7 @@ class Vehicle(object)
 	Return: True - disarmed successfully
 	        False - disarm denied
 	'''
-	def disarm(force = False, self):
+	def disarm(self, force = False):
 		if not force:
 			if self.STATE != VehicleState.landed:
 				print "Err: Cannot disarm in %s state." % self.STATE
@@ -145,19 +149,31 @@ class Vehicle(object)
 	Function name: takeoff
 	Description: Send takeoff command for the vehicle to a target altitude.
 	Param: targetHeight - target height in meters
+	       wait_ready - wait until the vehicle has reached the target altitude, True by default
 	Return: True - takeoff command sent successfully
 	        False - cannot send takeoff command
 	'''
-	def takeoff(targetHeight, self):
+	def takeoff(self, targetHeight, wait_ready = True):
 		if self.STATE != VehicleState.landed:
 			print "Err: Takeoff denied with vehicle state %s." % self.STATE
 			return False
 		elif targetHeight <= 0:
 			print "Err: Takeoff denied with invalid target height %d." % targetHeight
 			return False
-		else:
-			self.vehicle.simple_takeoff(targetHeight)
-			return True
+		
+		self.STATE = VehicleState.takeoff
+		self.vehicle.simple_takeoff(targetHeight)
+		print "Vehicle is taking off!"
+		
+		while wait_ready:
+			print " Current altitude: ", self.vehicle.location.global_relative_frame.alt 
+			#Break and return from function just below target altitude.        
+			if self.vehicle.location.global_relative_frame.alt >= targetHeight * TAKEOFF_ALT_SCALER: 
+				print "Reached target altitude"
+				self.STATE = VehicleState.auto
+				break
+			time.sleep(TAKEOFF_CHECK_TIME)
+		return True
 	
 	'''
 	Function name: land
@@ -167,7 +183,7 @@ class Vehicle(object)
 	Return: True - landing completed
 	        False - landing command was denied by vehicle
 	'''
-	def land(force = False, self):
+	def land(self, force = False):
 		if self.STATE == VehicleState.preFlight \
 		or self.STATE == VehicleState.landing \
 		or self.STATE == VehicleState.landed:
@@ -185,3 +201,58 @@ class Vehicle(object)
 			print "Landed successfully."
 			self.STATE = VehicleState.landed
 			return True
+
+	'''
+	Function name: send_nav_velocity
+	Description: send_nav_velocity command to vehicle to request it fly in 
+	             specified direction
+	Param: velocity_x - x axis velocity in m/s
+	       velocity_y - y axis velocity in m/s
+	       velocity_z - z axis velocity in m/s
+	Return: True - message sent successfully
+	        False - operation denied
+	'''
+	def send_nav_velocity(self, velocity_x, velocity_y, velocity_z):
+		if self.STATE != VehicleState.auto:
+			print "Err: Velocity control denied with vehicle state %s." % self.STATE
+			return False
+			
+		# create the SET_POSITION_TARGET_LOCAL_NED command
+		msg = self.vehicle.message_factory.set_position_target_local_ned_encode(
+						0,       # time_boot_ms (not used)
+						0, 0,    # target system, target component
+						mavutil.mavlink.MAV_FRAME_LOCAL_NED, # frame
+						0b0000111111000111, # type_mask (only speeds enabled)
+						0, 0, 0, # x, y, z positions (not used)
+						velocity_x, velocity_y, velocity_z, # x, y, z velocity in m/s
+						0, 0, 0, # x, y, z acceleration (not used)
+						0, 0)    # yaw, yaw_rate (not used) 
+		# send command to vehicle
+		self.vehicle.send_mavlink(msg)
+		self.vehicle.flush()
+		return True
+		
+	'''
+	Function name: condition_yaw
+	Description: send condition_yaw MAVLink command to control the vehicle's heading
+	Param: heading - vehicle's target heading in degrees
+	Return: True - message sent successfully
+	        False - operation denied
+	'''
+	def condition_yaw(self, heading)
+		if self.STATE != VehicleState.auto:
+			print "Err: Yaw control denied with vehicle state %s." % self.STATE
+			return False
+
+		# create the CONDITION_YAW command
+		msg = self.vehicle.message_factory.mission_item_encode(0, 0,  # target system, target component
+						0,     # sequence
+						mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, # frame
+						mavutil.mavlink.MAV_CMD_CONDITION_YAW,         # command
+						2, # current - set to 2 to make it a guided command
+						0, # auto continue
+						heading, 0, 0, 0, 0, 0, 0) # param 1 ~ 7
+		# send command to vehicle
+		self.vehicle.send_mavlink(msg)
+		self.vehicle.flush()
+		return True
