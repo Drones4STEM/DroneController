@@ -8,31 +8,30 @@ Description: This File contains controlling methods for drones
 '''
 
 import dronekit
+from pymavlink import mavutil
 import time
 
-# Vehicle initialization check time period in seconds
-INITIALIZE_CHECK_TIME = 1
 # Initialization timeout in seconds
 INITIALIZE_TIMEOUT = 60
 # Mode switching check time period in seconds
 SWITCH_MODE_CHECK_TIME = 0.5
 # Mode switching timeout in seconds
-SWITCH_MODE_TIMEOUT = 2
+SWITCH_MODE_TIMEOUT = 4
 # Arming check time in seconds
 ARM_CHECK_TIME = 0.5
 # Arming timeout in seconds
 ARM_TIMEOUT = 2
 # Taking off target altitude threshold scaler
 TAKEOFF_ALT_SCALER = 0.95
-# Taking off altitude check time period in seconds
-TAKEOFF_CHECK_TIME = 1
+# Standard check time in seconds
+STD_CHECK_TIME = 1
 
 '''
 Class name: VehicleState
 Description: VehicleState is an enumerate class which indicates the 
              current vehicle state.
 '''
-class VehicleState(object)
+class VehicleState(object):
 	preFlight = "PREFLIGHT"
 	takeoff = "TAKEOFF"
 	auto = "AUTO"
@@ -40,9 +39,9 @@ class VehicleState(object)
 	landing = "LANDING"
 	landed = "LANDED"
 
-class Vehicle(object)
+class Vehicle(object):
 	def __init__(self, FCAddress = None, baudRate = 921600):
-		# IP address for SITL simulator. Port 14550 is reserved for GCS
+		# IP address for SITL simulator. Port 14550 is reserved for GCS.
 		# If you're running SITL, make sure mavproxy is running and Port
 		# 14551 has been configured as an "--out" port
 		self.SITL = "127.0.0.1:14551"
@@ -68,7 +67,7 @@ class Vehicle(object)
 			print "Err: Connection denied with vehicle state %s." % self.STATE
 			return False
 		
-		if simulation：	
+		if simulation:
 			connectStr = self.SITL
 		else:
 			connectStr = self.FC
@@ -82,8 +81,9 @@ class Vehicle(object)
 		print "Waiting for vehicle to initialize..."
 		timeoutCounter = 0
 		while not self.vehicle.is_armable:
-			time.sleep(INITIALIZE_CHECK_TIME)
-			if (timeoutCounter += 1) >= (INITIALIZE_TIMEOUT / INITIALIZE_CHECKTIME):
+			time.sleep(STD_CHECK_TIME)
+			timeoutCounter += 1
+			if timeoutCounter >= (INITIALIZE_TIMEOUT / INITIALIZE_CHECKTIME):
 				print "Vehicle initialization timeout."
 				return False
 		
@@ -102,7 +102,8 @@ class Vehicle(object)
 		timeoutCounter = 0
 		while self.vehicle.mode != dronekit.VehicleMode(targetMode):
 			time.sleep(SWITCH_MODE_CHECK_TIME)
-			if (timeoutCounter += 1) >= (SWITCH_MODE_TIMEOUT / SWITCH_MODE_CHECK_TIME):
+			timeoutCounter += 1
+			if timeoutCounter >= (SWITCH_MODE_TIMEOUT / SWITCH_MODE_CHECK_TIME):
 				return False
 		
 		return True
@@ -123,7 +124,8 @@ class Vehicle(object)
 		timeoutCounter = 0
 		while not self.vehicle.armed:
 			time.sleep(ARM_CHECK_TIME)
-			if (timeoutCounter += 1) >= (ARM_TIMEOUT / ARM_CHECK_TIME):
+			timeoutCounter += 1
+			if timeoutCounter >= (ARM_TIMEOUT / ARM_CHECK_TIME):
 				return False
 		
 		self.STATE = VehicleState.landed
@@ -172,7 +174,7 @@ class Vehicle(object)
 				print "Reached target altitude"
 				self.STATE = VehicleState.auto
 				break
-			time.sleep(TAKEOFF_CHECK_TIME)
+			time.sleep(STD_CHECK_TIME)
 		return True
 	
 	'''
@@ -198,9 +200,10 @@ class Vehicle(object)
 			return False
 		
 		while self.vehicle.armed:
-			print "Landed successfully."
-			self.STATE = VehicleState.landed
-			return True
+			time.sleep(STD_CHECK_TIME)
+		print "Landed successfully."
+		self.STATE = VehicleState.landed
+		return True
 
 	'''
 	Function name: send_nav_velocity
@@ -239,7 +242,7 @@ class Vehicle(object)
 	Return: True - message sent successfully
 	        False - operation denied
 	'''
-	def condition_yaw(self, heading)
+	def condition_yaw(self, heading):
 		if self.STATE != VehicleState.auto:
 			print "Err: Yaw control denied with vehicle state %s." % self.STATE
 			return False
