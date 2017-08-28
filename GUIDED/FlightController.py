@@ -4,7 +4,7 @@ Author: Roger Wang
 Description: This File contains controlling methods for drones
              implemented with Optical Flow sensor, range finder and
              a companion computer. This script is designed for indoor 
-			 missions.
+             missions.
 '''
 
 import dronekit
