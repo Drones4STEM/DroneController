@@ -10,6 +10,7 @@ Description: This File contains controlling methods for drones
 import dronekit
 from pymavlink import mavutil
 import time
+import threading
 
 # Initialization timeout in seconds
 INITIALIZE_TIMEOUT = 60
@@ -25,6 +26,8 @@ ARM_TIMEOUT = 2
 TAKEOFF_ALT_SCALER = 0.95
 # Standard check time in seconds
 STD_CHECK_TIME = 1
+# Failsafe sleep time in seconds
+FS_SLEEP_TIME = 1
 
 '''
 Class name: VehicleState
@@ -53,16 +56,23 @@ class Vehicle(object):
 		self.STATE = VehicleState.preFlight
 		# The vehicle object
 		self.vehicle = None
+		# The failsafe controller
+		self.fsController = None
 		
 	'''
 	Function name: initialize
-	Description: Connect to the vehicle with DroneKit and initialize 
-	             the vehicle object
+	Description: Connect to the vehicle with DroneKit and initialize the vehicle object,
+	             and start the failsafe controller thread.
 	Param: simulation - True to enable simulation, False for real vehicle connection
 	Return: True - initialized successfully
 	        False - initialization not successful
 	'''
 	def initialize(self, simulation = False):
+		# Start the failsafe controller thread
+		if not self.fsController:
+			self.fsController = FailsafeController(self)
+			self.fsController.start()
+		
 		if self.STATE != VehicleState.preFlight:
 			print "Err: Connection denied with vehicle state %s." % self.STATE
 			return False
@@ -80,10 +90,13 @@ class Vehicle(object):
 		
 		print "Waiting for vehicle to initialize..."
 		timeoutCounter = 0
-		while not self.vehicle.is_armable:
+		# Check the vehicle and EKF state
+		while not (self.vehicle.mode != 'INITIALISING'):# and self.vehicle._ekf_predposhorizabs):
 			time.sleep(STD_CHECK_TIME)
 			timeoutCounter += 1
-			if timeoutCounter >= (INITIALIZE_TIMEOUT / INITIALIZE_CHECKTIME):
+			print 'vehicle mode = ', self.vehicle.mode
+			print 'ekf = ', self.vehicle._ekf_predposhorizabs
+			if timeoutCounter >= (INITIALIZE_TIMEOUT / STD_CHECK_TIME):
 				print "Vehicle initialization timeout."
 				return False
 		
@@ -259,3 +272,43 @@ class Vehicle(object):
 		self.vehicle.send_mavlink(msg)
 		self.vehicle.flush()
 		return True
+	
+	'''
+	Function name: exit
+	Description: Stop all operations
+	Return: True - exited successfully
+	        False - Something wrong happened
+	'''
+	def exit(self):
+		if self.STATE != VehicleState.landed:
+			print "Err: cannot exit when still in air! State %s." % self.STATE
+			return False
+		
+		self.fsController.join()
+		
+class FailsafeController(threading.Thread):
+	def __init__(self, ctrlInstance):
+		self.instance = ctrlInstance
+		self.stoprequest = threading.Event()
+		super(FailsafeController, self).__init__()
+	
+	def run(self):
+		while not self.stoprequest.isSet():
+			if self.instance.STATE == VehicleState.auto or self.instance.STATE == VehicleState.takeoff:
+				# A failsafe error will trigger the aircraft to switch into LAND or RTL mode
+				if self.instance.vehicle.mode == 'LAND' or self.instance.vehicle.mode == 'RTL':
+					if self.instance.vehicle.armed:
+						self.instance.STATE = VehicleState.landing
+					else:
+						self.instance.STATE = VehicleState.landed
+						
+				# If not in GUIDED or AUTO mode, the vehicle is controlled manually
+				elif self.instance.STATE != VehicleState.manual and self.instance.vehicle.mode != 'GUIDED' \
+				and self.instance.vehicle.mode != 'AUTO':
+					self.instance.STATE = VehicleState.manual
+				
+			time.sleep(FS_SLEEP_TIME)
+		
+	def join(self, timeout=None):
+		self.stoprequest.set()
+		super(FailsafeController, self).join(timeout)

@@ -38,3 +38,5 @@ while not myCopter.land():
 	if timeoutCounter > 3:
 		print "Critical: Cannot land the vehicle after 3 retries."
 		sys.exit(1)
+		
+myCopter.exit()
