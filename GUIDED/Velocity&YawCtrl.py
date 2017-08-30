@@ -1,8 +1,8 @@
 '''
-File: VelocityCtrl.py
+File: Velocity&YawCtrl.py
 Author: Roger Wang
 Description: This file is an example for a basic practice to command the drone to 
-             takeoff, control its velocity and land.           
+             takeoff, control its velocity, yaw orientation and land.           
 '''
 
 import FlightController
@@ -31,8 +31,8 @@ if not myCopter.takeoff(1):
 # Hover for 5 seconds
 time.sleep(5)
 
-# Go forward at 1m/s for 5 seconds
-print "Going forward at 1m/s for 5s"
+# Go westward at 1m/s for 5 seconds
+print "Going westward at 1m/s for 5s"
 myCopter.send_nav_velocity(0, -1, 0)
 time.sleep(5)
 
@@ -41,8 +41,18 @@ print "Hovering"
 myCopter.send_nav_velocity(0, 0, 0)
 time.sleep(5)
 
-# Go rightward at 1m/s for 5 seconds
-print "Going rightward at 1m/s for 5s"
+# Change yaw direction to (0, north) and wait for 5 seconds
+print "Change the vehicle direction to north"
+myCopter.condition_yaw(0)
+time.sleep(5)
+
+# Change yaw direction to (90, east) and wait for 5 seconds
+print "Change the vehicle direction to east"
+myCopter.condition_yaw(90)
+time.sleep(5)
+
+# Go northward at 1m/s for 5 seconds
+print "Going northward at 1m/s for 5s"
 myCopter.send_nav_velocity(1, 0, 0)
 time.sleep(5)
 
@@ -63,3 +73,5 @@ while not myCopter.land():
 	if timeoutCounter > 3:
 		print "Critical: Cannot land the vehicle after 3 retries."
 		sys.exit(1)
+		
+myCopter.exit()
