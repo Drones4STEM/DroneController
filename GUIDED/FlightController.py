@@ -91,7 +91,7 @@ class Vehicle(object):
 		print "Waiting for vehicle to initialize..."
 		timeoutCounter = 0
 		# Check the vehicle and EKF state
-		while not (self.vehicle.mode != 'INITIALISING'):# and self.vehicle._ekf_predposhorizabs):
+		while not (self.vehicle.mode != 'INITIALISING' and self.vehicle._ekf_predposhorizrel):
 			time.sleep(STD_CHECK_TIME)
 			timeoutCounter += 1
 			print 'vehicle mode = ', self.vehicle.mode
@@ -295,6 +295,9 @@ class FailsafeController(threading.Thread):
 	def run(self):
 		while not self.stoprequest.isSet():
 			if self.instance.STATE == VehicleState.auto or self.instance.STATE == VehicleState.takeoff:
+				# The vehicle is disarmed unexpectedly
+				if not self.instance.vehicle.armed:
+					self.instance.STATE == VehicleState.landed
 				# A failsafe error will trigger the aircraft to switch into LAND or RTL mode
 				if self.instance.vehicle.mode == 'LAND' or self.instance.vehicle.mode == 'RTL':
 					if self.instance.vehicle.armed:
