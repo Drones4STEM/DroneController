@@ -182,6 +182,9 @@ class Vehicle(object):
 		
 		while wait_ready:
 			print " Current altitude: ", self.vehicle.location.global_relative_frame.alt 
+			if self.STATE != VehicleState.takeoff:
+				print "Err: Takeoff terminated unexpectedly."
+				return False
 			#Break and return from function just below target altitude.        
 			if self.vehicle.location.global_relative_frame.alt >= targetHeight * TAKEOFF_ALT_SCALER: 
 				print "Reached target altitude"
@@ -297,7 +300,7 @@ class FailsafeController(threading.Thread):
 			if self.instance.STATE == VehicleState.auto or self.instance.STATE == VehicleState.takeoff:
 				# The vehicle is disarmed unexpectedly
 				if not self.instance.vehicle.armed:
-					self.instance.STATE == VehicleState.landed
+					self.instance.STATE = VehicleState.landed
 				# A failsafe error will trigger the aircraft to switch into LAND or RTL mode
 				if self.instance.vehicle.mode == 'LAND' or self.instance.vehicle.mode == 'RTL':
 					if self.instance.vehicle.armed:
