@@ -183,7 +183,7 @@ class Vehicle(object):
 		while wait_ready:
 			print " Current altitude: ", self.vehicle.location.global_relative_frame.alt 
 			if self.STATE != VehicleState.takeoff:
-				print "Err: Takeoff terminated unexpectedly."
+				print "Err: Takeoff terminated unexpectedly with state %s." % self.STATE
 				return False
 			#Break and return from function just below target altitude.        
 			if self.vehicle.location.global_relative_frame.alt >= targetHeight * TAKEOFF_ALT_SCALER: 
@@ -225,9 +225,9 @@ class Vehicle(object):
 	Function name: send_nav_velocity
 	Description: send_nav_velocity command to vehicle to request it fly in 
 	             specified direction
-	Param: velocity_x - x axis velocity in m/s
-	       velocity_y - y axis velocity in m/s
-	       velocity_z - z axis velocity in m/s
+	Param: velocity_x - northward velocity in m/s
+	       velocity_y - eastward velocity in m/s
+	       velocity_z - downward velocity in m/s
 	Return: True - message sent successfully
 	        False - operation denied
 	'''
@@ -296,14 +296,22 @@ class FailsafeController(threading.Thread):
 		super(FailsafeController, self).__init__()
 	
 	def run(self):
+		disarmCounter = 0
 		while not self.stoprequest.isSet():
 			if self.instance.STATE == VehicleState.auto or self.instance.STATE == VehicleState.takeoff:
 				# The vehicle is disarmed unexpectedly
 				if not self.instance.vehicle.armed:
-					self.instance.STATE = VehicleState.landed
+					# Counter was added against latency in 'vehicle.armed'
+					disarmCounter += 1
+					if disarmCounter >= 3:
+						print 'Vehicle disarmed unexpectedly.'
+						self.instance.STATE = VehicleState.landed
+				else:
+					disarmCounter = 0
 				# A failsafe error will trigger the aircraft to switch into LAND or RTL mode
 				if self.instance.vehicle.mode == 'LAND' or self.instance.vehicle.mode == 'RTL':
 					if self.instance.vehicle.armed:
+						print 'Failsafe triggered, now landing.'
 						self.instance.STATE = VehicleState.landing
 					else:
 						self.instance.STATE = VehicleState.landed
