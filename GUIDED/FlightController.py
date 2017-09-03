@@ -104,13 +104,13 @@ class Vehicle(object):
 		return True
 		
 	'''
-	Function name: switchMode
+	Function name: switch_mode
 	Description: Switch to a target mode and return whether it was successful.
 	Param: targetMode - the mode to be switched, "GUIDED" by default.
 	Return: True - successfully switched to target mode
 	        False - failed to do so
 	'''
-	def switchMode(self, targetMode = "GUIDED"):
+	def switch_mode(self, targetMode = "GUIDED"):
 		self.vehicle.mode = dronekit.VehicleMode(targetMode)
 		timeoutCounter = 0
 		while self.vehicle.mode != dronekit.VehicleMode(targetMode):
@@ -125,13 +125,13 @@ class Vehicle(object):
 	Function name: arm
 	Description: Arm the vehicle and return whether it was successful.
 	Param: checkGUIDED - when set True, if the vehicle were not in GUIDED mode,
-	                     it would call switchMode() to switch to GUIDED mdoe.
+	                     it would call switch_mode() to switch to GUIDED mode.
 	Return: True - armed successfully
 	        False - failed to do so
 	'''
 	def arm(self, checkGUIDED = True):
 		if checkGUIDED and self.vehicle.mode != dronekit.VehicleMode("GUIDED"):
-			self.switchMode()
+			self.switch_mode()
 		
 		self.vehicle.armed = True
 		timeoutCounter = 0
@@ -208,11 +208,15 @@ class Vehicle(object):
 			print "Err: Land denied with vehicle state %s." % self.STATE
 			return False
 		
-		if self.switchMode("LAND"):
-			self.STATE = VehicleState.landing
+		# Change the STATE first, prevent triggering failsafe incorrectly
+		lastSTATE = self.STATE
+		self.STATE = VehicleState.landing
+		
+		if self.switch_mode("LAND"):
 			print "Landing"
 		else:
 			print "Err: Failed to switch to LAND."
+			self.STATE = lastSTATE
 			return False
 		
 		while self.vehicle.armed:
@@ -220,27 +224,72 @@ class Vehicle(object):
 		print "Landed successfully."
 		self.STATE = VehicleState.landed
 		return True
+		
+	'''
+	Function name: goto
+	Description: guide the vehicle to a position relative to the vehicle
+	Param: pos_x - Position forward/northward in meters
+	       pos_y - Position rightward/eastward in meters
+	       pos_z - Position downward in meters (should be negative)
+	       relative - True for relative position(forward etc), False for absolute 
+	                  position(northward etc)
+	Return: True - message sent successfully
+	        False - operation denied
+	'''
+	def goto(self, pos_x, pos_y, pos_z, relative = True):
+		if self.STATE != VehicleState.auto:
+			print "Err: Goto command denied with vehicle state %s." % self.STATE
+			return False
+		
+		# Decide which frame type to be used
+		if relative:
+			frame = mavutil.mavlink.MAV_FRAME_BODY_OFFSET_NED
+		else:
+			frame = mavutil.mavlink.MAV_FRAME_LOCAL_OFFSET_NED
+		
+		# create the SET_POSITION_TARGET_LOCAL_NED command
+		msg = self.vehicle.message_factory.set_position_target_local_ned_encode(
+						0,       # time_boot_ms (not used)
+						0, 0,    # target system, target component
+						frame,   # frame
+						0b0000111111111000, # type_mask (only positions enabled)
+						pos_x, pos_y, pos_z, # x, y, z positions
+						0, 0, 0, # x, y, z velocity(not used)
+						0, 0, 0, # x, y, z acceleration (not used)
+						0, 0)    # yaw, yaw_rate (not used) 
+		# send command to vehicle
+		self.vehicle.send_mavlink(msg)
+		self.vehicle.flush()
+		return True
 
 	'''
 	Function name: send_nav_velocity
 	Description: send_nav_velocity command to vehicle to request it fly in 
 	             specified direction
-	Param: velocity_x - northward velocity in m/s
-	       velocity_y - eastward velocity in m/s
+	Param: velocity_x - forward/northward velocity in m/s
+	       velocity_y - rightward/eastward velocity in m/s
 	       velocity_z - downward velocity in m/s
+	       relative - True for relative velocity(forward etc), False for absolute
+	       velocity(northward etc)
 	Return: True - message sent successfully
 	        False - operation denied
 	'''
-	def send_nav_velocity(self, velocity_x, velocity_y, velocity_z):
+	def send_nav_velocity(self, velocity_x, velocity_y, velocity_z, relative = True):
 		if self.STATE != VehicleState.auto:
 			print "Err: Velocity control denied with vehicle state %s." % self.STATE
 			return False
+			
+		# Decide which frame type to be used
+		if relative:
+			frame = mavutil.mavlink.MAV_FRAME_BODY_OFFSET_NED
+		else:
+			frame = mavutil.mavlink.MAV_FRAME_LOCAL_NED
 			
 		# create the SET_POSITION_TARGET_LOCAL_NED command
 		msg = self.vehicle.message_factory.set_position_target_local_ned_encode(
 						0,       # time_boot_ms (not used)
 						0, 0,    # target system, target component
-						mavutil.mavlink.MAV_FRAME_LOCAL_NED, # frame
+						frame,   # frame
 						0b0000111111000111, # type_mask (only speeds enabled)
 						0, 0, 0, # x, y, z positions (not used)
 						velocity_x, velocity_y, velocity_z, # x, y, z velocity in m/s
@@ -254,26 +303,73 @@ class Vehicle(object):
 	'''
 	Function name: condition_yaw
 	Description: send condition_yaw MAVLink command to control the vehicle's heading
-	Param: heading - vehicle's target heading in degrees
+	Param: heading - vehicle's target heading in degrees,
+	       relative - True for relative yaw angle, False for absolute
+		   clock_wise - Only meaningful when relative = True.
+		                True for clock wise, False for counter clock wise
 	Return: True - message sent successfully
 	        False - operation denied
 	'''
-	def condition_yaw(self, heading):
+	def condition_yaw(self, heading, relative = True, clock_wise = True):
 		if self.STATE != VehicleState.auto:
 			print "Err: Yaw control denied with vehicle state %s." % self.STATE
 			return False
+		
+		# Yaw command in absolute or relative angle
+		if relative:
+			isRelative = 1
+		else:
+			isRelative = 0
+			
+		# The vehicle will rotate in cw or ccw by some degrees
+		if clock_wise:
+			direction = 1  # Degree described by 'heading' will be added to current degree
+		else:
+			direction = -1 # Degree described by 'heading' will be subscribed from current degree
+		if not relative:
+			direction = 0
 
 		# create the CONDITION_YAW command
-		msg = self.vehicle.message_factory.mission_item_encode(0, 0,  # target system, target component
-						0,     # sequence
-						mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, # frame
-						mavutil.mavlink.MAV_CMD_CONDITION_YAW,         # command
-						2, # current - set to 2 to make it a guided command
-						0, # auto continue
-						heading, 0, 0, 0, 0, 0, 0) # param 1 ~ 7
+		msg = self.vehicle.message_factory.command_long_encode(
+						0, 0,       # target system, target component
+						mavutil.mavlink.MAV_CMD_CONDITION_YAW, # command
+						0,          # confirmation
+						heading,    # param 1, yaw in degrees
+						0,          # param 2, yaw speed (not used)
+						direction,  # param 3, direction
+						isRelative, # param 4, relative or absolute degrees 
+						0, 0, 0)    # param 5-7, not used
 		# send command to vehicle
 		self.vehicle.send_mavlink(msg)
 		self.vehicle.flush()
+		return True
+	
+	'''
+	Function name: hover
+	Description: command the vehicle to hold its current position
+	Param: duration - time for hovering in seconds
+	Return: True - message sent successfully
+	        False - operation denied
+	'''
+	def hover(self, duration):
+		if self.STATE != VehicleState.auto:
+			print "Err: Hovering denied with vehicle state %s." % self.STATE
+			return False
+	
+		# create the LOITER_UNLIM command
+		msg = self.vehicle.message_factory.command_long_encode(
+						0, 0,       # target system, target component
+						mavutil.mavlink.MAV_CMD_NAV_LOITER_UNLIM, # command
+						0,          # confirmation
+						0, 0, 0, 0, # param 1-4, not used
+						0, 0, 0)    # param 5-7, set 0 for current position
+		# send command to vehicle
+		self.vehicle.send_mavlink(msg)
+		self.vehicle.flush()
+		
+		time.sleep(duration)
+		
+		self.switch_mode()
 		return True
 	
 	'''
@@ -284,7 +380,7 @@ class Vehicle(object):
 	'''
 	def exit(self):
 		if self.STATE != VehicleState.landed:
-			print "Err: cannot exit when still in air! State %s." % self.STATE
+			print "Err: cannot exit when still in the air! State %s." % self.STATE
 			return False
 		
 		self.fsController.join()
@@ -318,7 +414,7 @@ class FailsafeController(threading.Thread):
 						
 				# If not in GUIDED or AUTO mode, the vehicle is controlled manually
 				elif self.instance.STATE != VehicleState.manual and self.instance.vehicle.mode != 'GUIDED' \
-				and self.instance.vehicle.mode != 'AUTO':
+				and self.instance.vehicle.mode != 'AUTO' and self.instance.vehicle.mode != 'LOITER':
 					self.instance.STATE = VehicleState.manual
 				
 			time.sleep(FS_SLEEP_TIME)

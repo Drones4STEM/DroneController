@@ -31,28 +31,21 @@ if not myCopter.takeoff(1):
 # Hover for 5 seconds
 time.sleep(5)
 
-# Go westward at 1m/s for 5 seconds
+#####################################################################
+# 
+#                       Velocity Control Examples
+#
+# Go westward at 1m/s for 5 seconds (absolute velocity)
 print "Going westward at 1m/s for 5s"
-myCopter.send_nav_velocity(0, -1, 0)
+myCopter.send_nav_velocity(0, -1, 0, relative = False)
 time.sleep(5)
 
 # Hover for 5 seconds
 print "Hovering"
-myCopter.send_nav_velocity(0, 0, 0)
-time.sleep(5)
+myCopter.hover(5)
 
-# Change yaw direction to (0, north) and wait for 5 seconds
-print "Change the vehicle direction to north"
-myCopter.condition_yaw(0)
-time.sleep(5)
-
-# Change yaw direction to (90, east) and wait for 5 seconds
-print "Change the vehicle direction to east"
-myCopter.condition_yaw(90)
-time.sleep(5)
-
-# Go northward at 1m/s for 5 seconds
-print "Going northward at 1m/s for 5s"
+# Go forward at 1m/s for 5 seconds (relative velocity)
+print "Going forward at 1m/s for 5s"
 myCopter.send_nav_velocity(1, 0, 0)
 time.sleep(5)
 
@@ -63,8 +56,43 @@ time.sleep(5)
 
 # Hover for 5 seconds
 print "Hovering"
-myCopter.send_nav_velocity(0, 0, 0)
+myCopter.hover(5)
+
+#####################################################################
+#
+#                        Yaw Control Examples
+#
+# Change yaw direction to (0, north) and wait for 5 seconds (absolute heading)
+print "Change the vehicle direction to north"
+myCopter.condition_yaw(0, relative = False)
 time.sleep(5)
+
+# Change yaw direction by 60 degrees, clock wise (relative heading)
+print "Change yaw direction by 60 degrees, clock wise"
+myCopter.condition_yaw(60, relative = True, clock_wise = True)
+time.sleep(5)
+
+# Hover for 5 seconds
+print "Hovering"
+myCopter.hover(5)
+
+#####################################################################
+#
+#                       Position Control Examples
+#
+# Go forward for 1m
+print "Go forward for 1m"
+myCopter.goto(1, 0, 0, relative = True)
+time.sleep(10)
+
+# Go eastward for 1m
+print "Go eastward for 1m"
+myCopter.goto(0, 1, 0, relative = False)
+time.sleep(10)
+
+# Hover for 5 seconds
+print "Hovering"
+myCopter.hover(5)
 
 # Land
 timeoutCounter = 0
