@@ -29,34 +29,30 @@ if not myCopter.takeoff(1):
 	sys.exit(1)
 
 # Hover for 5 seconds
-time.sleep(5)
+myCopter.hover(5)
 
 #####################################################################
 # 
 #                       Velocity Control Examples
 #
-# Go westward at 1m/s for 5 seconds (absolute velocity)
-print "Going westward at 1m/s for 5s"
-myCopter.send_nav_velocity(0, -1, 0, relative = False)
+# Go eastward at 0.2m/s for 5 seconds (absolute velocity)
+print "Going eastward at 0.2m/s for 5s"
+myCopter.send_nav_velocity(0, 0.2, 0, relative = False)
 time.sleep(5)
 
 # Hover for 5 seconds
 print "Hovering"
 myCopter.hover(5)
 
-# Go forward at 1m/s for 5 seconds (relative velocity)
-print "Going forward at 1m/s for 5s"
-myCopter.send_nav_velocity(1, 0, 0)
-time.sleep(5)
-
-# Without hovering, go upward at 0.2m/s for 5 seconds
-print "Going upward for 0.2m/s for 5 seconds"
-myCopter.send_nav_velocity(0, 0, -0.2)
+# Go forward at 0.2m/s for 5 seconds (relative velocity)
+print "Going forward at 0.2m/s for 5s"
+myCopter.send_nav_velocity(0.2, 0, 0)
 time.sleep(5)
 
 # Hover for 5 seconds
 print "Hovering"
 myCopter.hover(5)
+
 
 #####################################################################
 #
@@ -67,9 +63,9 @@ print "Change the vehicle direction to north"
 myCopter.condition_yaw(0, relative = False)
 time.sleep(5)
 
-# Change yaw direction by 60 degrees, clock wise (relative heading)
-print "Change yaw direction by 60 degrees, clock wise"
-myCopter.condition_yaw(60, relative = True, clock_wise = True)
+# Change yaw direction by 60 degrees, counter clock wise (relative heading)
+print "Change yaw direction by 60 degrees, counter clock wise"
+myCopter.condition_yaw(60, relative = True, clock_wise = False)
 time.sleep(5)
 
 # Hover for 5 seconds
