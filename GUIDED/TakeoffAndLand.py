@@ -29,7 +29,7 @@ if not myCopter.takeoff(1):
 	sys.exit(1)
 
 # Hover for 10 seconds
-time.sleep(10)
+myCopter.hover(10)
 
 # Land
 timeoutCounter = 0
