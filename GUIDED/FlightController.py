@@ -11,6 +11,8 @@ import dronekit
 from pymavlink import mavutil
 import time
 import threading
+import os
+from pymavlink.dialects.v10 import ardupilotmega
 
 # Initialization timeout in seconds
 INITIALIZE_TIMEOUT = 60
@@ -42,6 +44,24 @@ class VehicleState(object):
 	landing = "LANDING"
 	landed = "LANDED"
 
+'''
+Class name: Custom_DroneKit_Vehicle
+Description: Add some custom features to original DroneKit Vehicle class
+'''
+class Custom_DroneKit_Vehicle(dronekit.Vehicle):
+	def __init__(self, *args):
+		super(Custom_DroneKit_Vehicle, self).__init__(*args)
+		
+		self._ekf_predposhorizrel = False
+		@self.on_message('EKF_STATUS_REPORT')
+		def listener(self, name, m):
+			# boolean: EKF's predicted horizontal position (absolute) estimate is good
+			self._ekf_predposhorizrel = (m.flags & ardupilotmega.EKF_PRED_POS_HORIZ_REL) > 0
+
+'''
+Class name: Vehicle
+Description: Main vehicle class
+'''
 class Vehicle(object):
 	def __init__(self, FCAddress = None, baudRate = 921600):
 		# IP address for SITL simulator. Port 14550 is reserved for GCS.
@@ -82,7 +102,7 @@ class Vehicle(object):
 		else:
 			connectStr = self.FC
 		print "Connecting to the vehicle on %s with baud rate %d." % (connectStr, self.BAUD)
-		self.vehicle = dronekit.connect(connectStr, baud = self.BAUD, wait_ready = True)
+		self.vehicle = dronekit.connect(connectStr, baud = self.BAUD, wait_ready = True, vehicle_class = Custom_DroneKit_Vehicle)
 		
 		if not self.vehicle:
 			print "Err: Unable to connect to vehicle."
@@ -169,6 +189,8 @@ class Vehicle(object):
 	        False - cannot send takeoff command
 	'''
 	def takeoff(self, targetHeight, wait_ready = True):
+		if self.fsController.triggered:
+			return False
 		if self.STATE != VehicleState.landed:
 			print "Err: Takeoff denied with vehicle state %s." % self.STATE
 			return False
@@ -202,11 +224,14 @@ class Vehicle(object):
 	        False - landing command was denied by vehicle
 	'''
 	def land(self, force = False):
-		if self.STATE == VehicleState.preFlight \
-		or self.STATE == VehicleState.landing \
-		or self.STATE == VehicleState.landed:
-			print "Err: Land denied with vehicle state %s." % self.STATE
-			return False
+		if not force:
+			if self.fsController.triggered:
+				return False
+			if self.STATE == VehicleState.preFlight \
+			or self.STATE == VehicleState.landing \
+			or self.STATE == VehicleState.landed:
+				print "Err: Land denied with vehicle state %s." % self.STATE
+				return False
 		
 		# Change the STATE first, prevent triggering failsafe incorrectly
 		lastSTATE = self.STATE
@@ -237,6 +262,8 @@ class Vehicle(object):
 	        False - operation denied
 	'''
 	def goto(self, pos_x, pos_y, pos_z, relative = True):
+		if self.fsController.triggered:
+			return False
 		if self.STATE != VehicleState.auto:
 			print "Err: Goto command denied with vehicle state %s." % self.STATE
 			return False
@@ -275,6 +302,8 @@ class Vehicle(object):
 	        False - operation denied
 	'''
 	def send_nav_velocity(self, velocity_x, velocity_y, velocity_z, relative = True):
+		if self.fsController.triggered:
+			return False
 		if self.STATE != VehicleState.auto:
 			print "Err: Velocity control denied with vehicle state %s." % self.STATE
 			return False
@@ -311,6 +340,8 @@ class Vehicle(object):
 	        False - operation denied
 	'''
 	def condition_yaw(self, heading, relative = True, clock_wise = True):
+		if self.fsController.triggered:
+			return False
 		if self.STATE != VehicleState.auto:
 			print "Err: Yaw control denied with vehicle state %s." % self.STATE
 			return False
@@ -352,6 +383,8 @@ class Vehicle(object):
 	        False - operation denied
 	'''
 	def hover(self, duration):
+		if self.fsController.triggered:
+			return False
 		if self.STATE != VehicleState.auto:
 			print "Err: Hovering denied with vehicle state %s." % self.STATE
 			return False
@@ -369,7 +402,8 @@ class Vehicle(object):
 		
 		time.sleep(duration)
 		
-		self.switch_mode()
+		if not self.fsController.triggered:
+			self.switch_mode()
 		return True
 	
 	'''
@@ -389,6 +423,7 @@ class FailsafeController(threading.Thread):
 	def __init__(self, ctrlInstance):
 		self.instance = ctrlInstance
 		self.stoprequest = threading.Event()
+		self.triggered = False
 		super(FailsafeController, self).__init__()
 	
 	def run(self):
@@ -409,6 +444,7 @@ class FailsafeController(threading.Thread):
 					if self.instance.vehicle.armed:
 						print 'Failsafe triggered, now landing.'
 						self.instance.STATE = VehicleState.landing
+						self.triggered = True
 					else:
 						self.instance.STATE = VehicleState.landed
 						
@@ -416,7 +452,11 @@ class FailsafeController(threading.Thread):
 				elif self.instance.STATE != VehicleState.manual and self.instance.vehicle.mode != 'GUIDED' \
 				and self.instance.vehicle.mode != 'AUTO' and self.instance.vehicle.mode != 'LOITER':
 					self.instance.STATE = VehicleState.manual
-				
+			
+			if self.triggered and not self.instance.vehicle.armed and self.instance.STATE == VehicleState.landing:
+				print 'Landed. Now exiting...'
+				os._exit(1)
+
 			time.sleep(FS_SLEEP_TIME)
 		
 	def join(self, timeout=None):
