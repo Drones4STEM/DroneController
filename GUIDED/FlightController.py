@@ -30,6 +30,8 @@ TAKEOFF_ALT_SCALER = 0.95
 STD_CHECK_TIME = 1
 # Failsafe sleep time in seconds
 FS_SLEEP_TIME = 1
+# Loiter hover throttle level
+LOITER_HOVER_THROTTLE = 1500
 
 '''
 Class name: VehicleState
@@ -55,7 +57,7 @@ class Custom_DroneKit_Vehicle(dronekit.Vehicle):
 		self._ekf_predposhorizrel = False
 		@self.on_message('EKF_STATUS_REPORT')
 		def listener(self, name, m):
-			# boolean: EKF's predicted horizontal position (absolute) estimate is good
+			# boolean: EKF's predicted horizontal position (relative) estimate is good
 			self._ekf_predposhorizrel = (m.flags & ardupilotmega.EKF_PRED_POS_HORIZ_REL) > 0
 
 '''
@@ -119,6 +121,8 @@ class Vehicle(object):
 			if timeoutCounter >= (INITIALIZE_TIMEOUT / STD_CHECK_TIME):
 				print "Vehicle initialization timeout."
 				return False
+		
+		self.set_home()
 		
 		print "Vehicle initialized successfully, ready for flight."
 		return True
@@ -388,6 +392,9 @@ class Vehicle(object):
 		if self.STATE != VehicleState.auto:
 			print "Err: Hovering denied with vehicle state %s." % self.STATE
 			return False
+		
+		# Set RC3(throttle) to the hover level
+		self.vehicle.channels.overrides['3'] = LOITER_HOVER_THROTTLE
 	
 		# create the LOITER_UNLIM command
 		msg = self.vehicle.message_factory.command_long_encode(
@@ -404,7 +411,35 @@ class Vehicle(object):
 		
 		if not self.fsController.triggered:
 			self.switch_mode()
+		
+		# Clear channel overrides
+		self.vehicle.channels.overrides['3'] = None
+		
 		return True
+		
+	'''
+	Function name: set_home
+	Description: Set 'home' to a specific position. This is necessary for guiding the 
+	             vehicle in GPS-denied conditions.
+	Return: True - command sent successfully
+	        False - operation denied
+	'''
+	def set_home(self, lng = 0, lat = 1, alt = 0):
+		if self.STATE != VehicleState.preFlight:
+			return False
+		# create the SET_HOME command
+		msg = self.vehicle.message_factory.command_long_encode(
+						0, 0,       # target system, target component
+						mavutil.mavlink.MAV_CMD_DO_SET_HOME, # command
+						0,          # confirmation
+						0,          # param 1, use absolute location
+						0, 0, 0,    # param 2-4, not used
+						lat,        # param 5, latitude
+						lng,        # param 6, longitude 
+						alt)          # param 7, altitude
+		# send command to vehicle
+		self.vehicle.send_mavlink(msg)
+		self.vehicle.flush()
 	
 	'''
 	Function name: exit
@@ -418,7 +453,11 @@ class Vehicle(object):
 			return False
 		
 		self.fsController.join()
-		
+
+'''
+Class name: FailsafeController
+Description: A failsafe thread handling failsafe exceptions.
+'''
 class FailsafeController(threading.Thread):
 	def __init__(self, ctrlInstance):
 		self.instance = ctrlInstance
@@ -441,12 +480,15 @@ class FailsafeController(threading.Thread):
 					disarmCounter = 0
 				# A failsafe error will trigger the aircraft to switch into LAND or RTL mode
 				if self.instance.vehicle.mode == 'LAND' or self.instance.vehicle.mode == 'RTL':
+					self.triggered = True
+					self.instance.vehicle.channels.overrides = None
 					if self.instance.vehicle.armed:
 						print 'Failsafe triggered, now landing.'
 						self.instance.STATE = VehicleState.landing
-						self.triggered = True
 					else:
+						print 'Failsafe triggered, landed unexpectedly. Now exiting...'
 						self.instance.STATE = VehicleState.landed
+						os._exit(1)
 						
 				# If not in GUIDED or AUTO mode, the vehicle is controlled manually
 				elif self.instance.STATE != VehicleState.manual and self.instance.vehicle.mode != 'GUIDED' \
