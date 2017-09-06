@@ -80,7 +80,47 @@ class Vehicle(object):
 		self.vehicle = None
 		# The failsafe controller
 		self.fsController = None
+
+	'''
+	Property name: attitude
+	Description: Current vehicle attitude
+	             attitude.roll - Vehicle roll in radians
+				 attitude.pitch - Vehicle pitch in radians
+				 attitude.yaw - Vehicle yaw in radians
+	'''
+	@property
+	def attitude(self):
+		return self.vehicle.attitude
+
+	'''
+	Property name: battery
+	Description: Current battery status.
+	             battery.voltage - Voltage in millivolts
+				 battery.current - Current in 10*milliamperes
+				 battery.level - Remaining battery energy. None if can't be estimated
+	'''
+	@property
+	def battery(self):
+		return self.vehicle.battery
 		
+	'''
+	Property name: channels
+	Description: Current RC channels input (in PWM values)
+	             channels['1'] - Channel 1 reading (avaliable from 1 to 8)
+	'''
+	@property
+	def channels(self):
+		return self.vehicle.channels
+
+	'''
+	Property name: rangefinder
+	Description: Current rangefinder read
+	             rangefinder.distance - Range finder read in meters
+	'''
+	@property
+	def rangefinder(self):
+		return self.vehicle.rangefinder
+	
 	'''
 	Function name: initialize
 	Description: Connect to the vehicle with DroneKit and initialize the vehicle object,
@@ -448,7 +488,7 @@ class Vehicle(object):
 	        False - Something wrong happened
 	'''
 	def exit(self):
-		if self.STATE != VehicleState.landed:
+		if self.STATE != VehicleState.landed and self.STATE != VehicleState.preFlight:
 			print "Err: cannot exit when still in the air! State %s." % self.STATE
 			return False
 		
