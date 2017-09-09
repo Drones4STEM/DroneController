@@ -421,7 +421,9 @@ class Vehicle(object):
 	
 	'''
 	Function name: hover
-	Description: command the vehicle to hold its current position
+	Description: command the vehicle to hold its current position. This method
+	             will switch the vehicle mode to LOITER and override the throttle
+	             level to LOITER_HOVER_THROTTLE
 	Param: duration - time for hovering in seconds
 	Return: True - message sent successfully
 	        False - operation denied
@@ -461,6 +463,8 @@ class Vehicle(object):
 	Function name: set_home
 	Description: Set 'home' to a specific position. This is necessary for guiding the 
 	             vehicle in GPS-denied conditions.
+	             NOTE that lng and lat can't be 0, otherwise the vehicle will reject
+	             this command
 	Return: True - command sent successfully
 	        False - operation denied
 	'''
@@ -476,7 +480,7 @@ class Vehicle(object):
 						0, 0, 0,    # param 2-4, not used
 						lat,        # param 5, latitude
 						lng,        # param 6, longitude 
-						alt)          # param 7, altitude
+						alt)        # param 7, altitude
 		# send command to vehicle
 		self.vehicle.send_mavlink(msg)
 		self.vehicle.flush()
@@ -493,6 +497,7 @@ class Vehicle(object):
 			return False
 		
 		self.fsController.join()
+		return True
 
 '''
 Class name: FailsafeController
