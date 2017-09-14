@@ -497,6 +497,8 @@ class Vehicle(object):
 			return False
 		
 		self.fsController.join()
+		self.vehicle.close()
+		
 		return True
 
 '''
