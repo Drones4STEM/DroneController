@@ -59,6 +59,16 @@ class Custom_DroneKit_Vehicle(dronekit.Vehicle):
 		def listener(self, name, m):
 			# boolean: EKF's predicted horizontal position (relative) estimate is good
 			self._ekf_predposhorizrel = (m.flags & ardupilotmega.EKF_PRED_POS_HORIZ_REL) > 0
+	
+	'''
+	Property name: is_armable
+	Description: override the is_armable property in dronekit.Vehicle, intended for
+	             indoor OF + RF autonomous missions. 
+	'''
+	@property
+	def is_armable(self):
+		return self.mode != 'INITIALISING' and self._ekf_predposhorizrel
+
 
 '''
 Class name: Vehicle
@@ -152,8 +162,8 @@ class Vehicle(object):
 		
 		print "Waiting for vehicle to initialize..."
 		timeoutCounter = 0
-		# Check the vehicle and EKF state
-		while not (self.vehicle.mode != 'INITIALISING' and self.vehicle._ekf_predposhorizrel):
+		# Check if the vehicle is able to arm
+		while not self.vehicle.is_armable:
 			time.sleep(STD_CHECK_TIME)
 			timeoutCounter += 1
 			print 'vehicle mode = ', self.vehicle.mode
