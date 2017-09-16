@@ -59,6 +59,7 @@ class Custom_DroneKit_Vehicle(dronekit.Vehicle):
 		def listener(self, name, m):
 			# boolean: EKF's predicted horizontal position (relative) estimate is good
 			self._ekf_predposhorizrel = (m.flags & ardupilotmega.EKF_PRED_POS_HORIZ_REL) > 0
+			self.notify_attribute_listeners('is_armable', self.is_armable, cache=True)
 	
 	'''
 	Property name: is_armable
