@@ -5,7 +5,7 @@ Velocity control, position control and yaw control are currently avaliable by``i
 
 See https://youtu.be/HeJs-0_Bv8s for the video of a real quad copter test. The script is avaliable in **GUIDED/Velocity&YawCtrl.py**
 
-###File Description
+### File Description
 
 **FlightController.py** - The library used to control an ArduCopter vehicle with optical flow sensor and rangefinder. (Things are little bit different from controlling a drone outdoors with GPS)
 
