@@ -25,7 +25,7 @@ ARM_CHECK_TIME = 0.5
 # Arming timeout in seconds
 ARM_TIMEOUT = 2
 # Taking off target altitude threshold scaler
-TAKEOFF_ALT_SCALER = 0.95
+TAKEOFF_ALT_SCALER = 0.9
 # Standard check time in seconds
 STD_CHECK_TIME = 1
 # Failsafe sleep time in seconds
@@ -68,7 +68,7 @@ class Custom_DroneKit_Vehicle(dronekit.Vehicle):
 	'''
 	@property
 	def is_armable(self):
-		return self.mode != 'INITIALISING' and self._ekf_predposhorizrel
+		return self.mode != 'INITIALISING' and self.rangefinder.distance and self._ekf_predposhorizrel
 
 
 '''
@@ -167,8 +167,8 @@ class Vehicle(object):
 		while not self.vehicle.is_armable:
 			time.sleep(STD_CHECK_TIME)
 			timeoutCounter += 1
-			print 'vehicle mode = ', self.vehicle.mode
-			print 'ekf = ', self.vehicle._ekf_predposhorizabs
+			#print 'vehicle mode = ', self.vehicle.mode
+			#print 'ekf = ', self.vehicle._ekf_predposhorizabs
 			if timeoutCounter >= (INITIALIZE_TIMEOUT / STD_CHECK_TIME):
 				print "Vehicle initialization timeout."
 				return False
@@ -243,27 +243,34 @@ class Vehicle(object):
 	Return: True - takeoff command sent successfully
 	        False - cannot send takeoff command
 	'''
-	def takeoff(self, targetHeight, wait_ready = True):
+	def takeoff(self, targetHeight, wait_ready = True, relative = True):
 		if self.fsController.triggered:
 			return False
 		if self.STATE != VehicleState.landed:
 			print "Err: Takeoff denied with vehicle state %s." % self.STATE
 			return False
-		elif targetHeight <= 0:
-			print "Err: Takeoff denied with invalid target height %d." % targetHeight
-			return False
+		#elif targetHeight <= 0:
+		#	print "Err: Takeoff denied with invalid target height %d." % targetHeight
+		#	return False
+		
+		if relative:
+			startHeightGlobal = self.vehicle.location.global_relative_frame.alt
+			targetHeightGlobal = startHeightGlobal + targetHeight
+		else:
+			startHeightGlobal = 0
+			targetHeightGlobal = targetHeight
 		
 		self.STATE = VehicleState.takeoff
-		self.vehicle.simple_takeoff(targetHeight)
+		self.vehicle.simple_takeoff(targetHeightGlobal)
 		print "Vehicle is taking off!"
 		
 		while wait_ready:
-			print " Current altitude: ", self.vehicle.location.global_relative_frame.alt 
+			print " Current altitude: ", self.vehicle.location.global_relative_frame.alt - startHeightGlobal 
 			if self.STATE != VehicleState.takeoff:
 				print "Err: Takeoff terminated unexpectedly with state %s." % self.STATE
 				return False
 			#Break and return from function just below target altitude.        
-			if self.vehicle.location.global_relative_frame.alt >= targetHeight * TAKEOFF_ALT_SCALER: 
+			if self.vehicle.location.global_relative_frame.alt - startHeightGlobal >= targetHeight * TAKEOFF_ALT_SCALER: 
 				print "Reached target altitude"
 				self.STATE = VehicleState.auto
 				break
