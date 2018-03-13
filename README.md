@@ -23,7 +23,7 @@ All these actions are done without any command from a RC transmitter. The drone 
 
 Libraries and examples used to control the drone's movements in GUIDED mode, if the drone is implemented with an optical flow sensor and a rangefinder.
 
-Velocity control, position control and yaw control are currently avaliable by``import FlightController`` , and an example script was provided to control the vehicle with SITL, or a real drone.
+Velocity control, position control and yaw control are currently avaliable by``import FlightController`` , and several example scripts are provided to control the vehicle with SITL, or a real drone.
 
 ## GUIDED_NOGPS
 
