@@ -1,6 +1,8 @@
 # DroneController
 Scripts to control the ArduCopter drone indoors via MAVLink protocol.
 
+# Demo
+
 The drone can be commanded to automatically takeoff
 
 ![takeoff](doc/takeoff_clip.gif)
