@@ -3,7 +3,9 @@ Libraries and examples used to control the drone's movements in GUIDED mode, if 
 
 Velocity control, position control and yaw control are currently avaliable by``import FlightController`` , and some example scripts are provided to control the vehicle with SITL, or a real drone. If you have a good understanding of ArduCopter, SITL and Companion Computers, you can get it worked with these provided examples quickly.
 
-See https://youtu.be/HeJs-0_Bv8s for the video of a real quad copter test. The script is avaliable in **GUIDED/Velocity&YawCtrl.py**
+See the following video of a real quad copter test. The script is avaliable in **GUIDED/Velocity&YawCtrl.py**
+
+[![Video_frame](https://img.youtube.com/vi/HeJs-0_Bv8s/0.jpg)](https://www.youtube.com/watch?v=HeJs-0_Bv8s)
 
 ### File Description
 
