@@ -1,17 +1,19 @@
 # DroneController
 Scripts to control the ArduCopter drone indoors via MAVLink protocol.
 
-The vechicle can be commanded to automatically takeoff
+The drone can be commanded to automatically takeoff
 
 ![takeoff](doc/takeoff_clip.gif)
 
-Control its movements in air
+Control its movement in air
 
 ![rect](doc/rect_clip.gif)
 
 And land
 
 ![land](doc/land_clip.gif)
+
+All these actions are done without any command from a RC transmitter. The drone is fully controlled by an onboard Raspberry Pi.
 
 ## GUIDED
 
